@@ -5,6 +5,8 @@ mod operations;
 mod percents;
 mod profit;
 
+use std::borrow::Cow;
+
 use strum::IntoStaticStr;
 
 use crate::db::Db;
@@ -84,7 +86,7 @@ impl State {
             SelectedView::Profit => {
                 placeholder(ui);
             }
-            SelectedView::Operations => match self.operations_state.view(ui, &self.db) {
+            SelectedView::Operations => match self.operations_state.view(ui, &self.db, None) {
                 operations::Response::ShowArticle(_id) => todo!(),
                 operations::Response::ShowBalance(_id) => todo!(),
                 operations::Response::None => {}
@@ -136,5 +138,18 @@ impl State {
         if chosen_one != SelectedView::None {
             self.selected = chosen_one;
         }
+    }
+}
+
+pub fn option_to_string(option: Option<&impl ToString>) -> Cow<'_, str> {
+    match option {
+        Some(val) => Cow::Owned(val.to_string()),
+        None => Cow::Borrowed(""),
+    }
+}
+pub fn option_to_string_with<'a>(option: Option<&impl ToString>, default: &'a str) -> Cow<'a, str> {
+    match option {
+        Some(val) => Cow::Owned(val.to_string()),
+        None => Cow::Borrowed(default),
     }
 }

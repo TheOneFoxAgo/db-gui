@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+
 use super::scheme::OperationsRow;
 use futures_util::TryStreamExt;
 use tokio_postgres::{
@@ -14,6 +16,9 @@ pub struct Inner {
 
     insert_to_operations: Statement,
     insert_to_articles: Statement,
+
+    update_in_operations: Statement,
+    update_in_articles: Statement,
 
     delete_from_operations: Statement,
     delete_from_articles: Statement,
@@ -43,6 +48,8 @@ impl Inner {
             select_from_balance,
             insert_to_operations,
             insert_to_articles,
+            update_in_operations,
+            update_in_articles,
             delete_from_operations,
             delete_from_articles,
             // create_balance,
@@ -53,6 +60,8 @@ impl Inner {
             Self::prepare_select_from_balance(&client),
             Self::prepare_insert_to_operations(&client),
             Self::prepare_insert_to_articles(&client),
+            Self::prepare_update_in_operations(&client),
+            Self::prepare_update_in_articles(&client),
             Self::prepare_delete_from_operations(&client),
             Self::prepare_delete_from_articles(&client),
             // Self::prepare_create_balance(&client),
@@ -66,6 +75,8 @@ impl Inner {
             select_from_balance,
             insert_to_operations,
             insert_to_articles,
+            update_in_operations,
+            update_in_articles,
             delete_from_operations,
             delete_from_articles,
             // create_balance,
@@ -75,16 +86,64 @@ impl Inner {
     pub fn user(&self) -> &str {
         &self.user
     }
-    pub async fn select_from_operations(&self) -> Result<Vec<OperationsRow>, Error> {
+    pub async fn select_from_operations(&self) -> Result<BTreeMap<i32, OperationsRow>, Error> {
         self.client
             .query_raw(&self.select_from_operations, NO_PARAMS)
             .await?
-            .map_ok(|r| r.try_into().unwrap())
+            .map_ok(|r| OperationsRow::new(r).unwrap())
             .try_collect()
             .await
     }
+    pub async fn insert_to_operations(
+        &self,
+        row: OperationsRow,
+    ) -> Result<BTreeMap<i32, OperationsRow>, Error> {
+        self.client
+            .execute(
+                &self.insert_to_operations,
+                &[&row.article_id, &row.debit, &row.credit, &row.create_date],
+            )
+            .await?;
+        self.select_from_operations().await
+    }
+    pub async fn update_in_operations(
+        &self,
+        id: i32,
+        row: OperationsRow,
+    ) -> Result<BTreeMap<i32, OperationsRow>, Error> {
+        self.client
+            .execute(
+                &self.update_in_operations,
+                &[
+                    &id,
+                    &row.article_id,
+                    &row.debit,
+                    &row.credit,
+                    &row.create_date,
+                ],
+            )
+            .await?;
+        self.select_from_operations().await
+    }
+    pub async fn delete_from_operations(
+        &self,
+        id: i32,
+    ) -> Result<BTreeMap<i32, OperationsRow>, Error> {
+        self.client
+            .execute(&self.delete_from_operations, &[&id])
+            .await?;
+        self.select_from_operations().await
+    }
     async fn prepare_select_from_operations(client: &Client) -> Result<Statement, Error> {
-        client.prepare("SELECT * FROM public.operations").await
+        client
+            .prepare(
+                "SELECT ops.id, ops.article_id, art.name AS article_name, \
+                        ops.debit, ops.credit, ops.create_date, ops.balance_id \
+                FROM public.operations ops \
+                LEFT JOIN public.articles art \
+                ON ops.article_id = art.id",
+            )
+            .await
     }
     async fn prepare_select_from_articles(client: &Client) -> Result<Statement, Error> {
         client.prepare("SELECT * FROM public.articles").await
@@ -110,6 +169,33 @@ impl Inner {
             )
             .await
     }
+    async fn prepare_update_in_operations(client: &Client) -> Result<Statement, Error> {
+        client
+            .prepare_typed(
+                "UPDATE public.operations \
+            	SET article_id=$2, debit=$3, credit=$4, create_date=$5 \
+            	WHERE id=$1",
+                &[
+                    Type::INT4,
+                    Type::INT4,
+                    Type::INT4,
+                    Type::INT4,
+                    Type::TIMESTAMP,
+                ],
+            )
+            .await
+    }
+    async fn prepare_update_in_articles(client: &Client) -> Result<Statement, Error> {
+        client
+            .prepare_typed(
+                "UPDATE public.articles \
+            	SET name=$2 \
+            	WHERE id=$1",
+                &[Type::INT4, Type::VARCHAR],
+            )
+            .await
+    }
+
     async fn prepare_delete_from_operations(client: &Client) -> Result<Statement, Error> {
         client
             .prepare_typed("DELETE FROM public.operations WHERE id = $1", &[Type::INT4])

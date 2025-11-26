@@ -1,74 +1,64 @@
+mod table;
+use std::collections::BTreeMap;
+
 use tokio_postgres::Error;
 
 use crate::{
     app::drive_result_promise,
     db::{
         Db,
-        scheme::{OperationsRow, TableRow},
+        scheme::{ArticlesRow, OperationsRow},
     },
     promise_lite::PromiseLite,
 };
 pub struct State {
-    table: Option<Vec<OperationsRow>>,
-    highlighted: Option<usize>,
-    edited: Option<(usize, [String; OperationsRow::COLUMNS])>,
+    table: Option<table::State>,
     error_message: Option<String>,
-    results: Promises,
+    result: Option<PromiseLite<Result<BTreeMap<i32, OperationsRow>, Error>>>,
 }
 pub enum Response {
     ShowArticle(i32),
     ShowBalance(i32),
     None,
 }
-struct Promises {
-    select: Option<PromiseLite<Result<Vec<OperationsRow>, Error>>>,
-    insert: Option<PromiseLite<Result<u64, Error>>>,
-    delete: Option<PromiseLite<Result<u64, Error>>>,
-}
 impl Default for State {
     fn default() -> Self {
         Self {
             table: None,
-            highlighted: None,
-            edited: None,
             error_message: None,
-            results: Promises {
-                select: None,
-                insert: None,
-                delete: None,
-            },
+            result: None,
         }
     }
 }
 impl State {
-    pub fn view(&mut self, ui: &mut egui::Ui, db: &Db) -> Response {
+    pub fn view(
+        &mut self,
+        ui: &mut egui::Ui,
+        db: &Db,
+        articles: Option<&BTreeMap<i32, ArticlesRow>>,
+    ) -> Response {
         ui.heading("Операции");
-        if let Some(table) = &self.table {
-            egui::Grid::new("Operations").num_columns(6).show(ui, |ui| {
-                for header in [
-                    "id",
-                    "article_id",
-                    "balance_id",
-                    "debit",
-                    "credit",
-                    "create_date",
-                ] {
-                    ui.strong(header);
-                }
-                ui.end_row();
-                for row in table {
-                    for label in row.to_string_array() {
-                        ui.label(label);
+        let is_waiting = self.result.is_some();
+        if let (Some(table), Some(articles)) = (&mut self.table, articles) {
+            if let Some(response) = table.show(ui, !is_waiting, articles) {
+                match response {
+                    table::Response::Update(id, operations_row) => {
+                        self.result = Some(db.update_in_operations(id, operations_row))
                     }
-                    ui.end_row();
+                    table::Response::Delete(id) => {
+                        self.result = Some(db.delete_from_operations(id))
+                    }
+                    table::Response::Insert(operations_row) => {
+                        self.result = Some(db.insert_to_operations(operations_row))
+                    }
                 }
-            });
+            }
         }
-        if self.results.select.is_some() {
+        if self.result.is_some() {
             ui.add_enabled(false, egui::Button::new("Загружаем..."));
         } else {
             if ui.button("Перезагрузить!").clicked() {
-                self.results.select = Some(db.select_from_operations())
+                self.result = Some(db.select_from_operations())
             }
         }
         self.process_results();
@@ -81,9 +71,9 @@ impl State {
     }
     fn process_results(&mut self) {
         drive_result_promise!(
-            self.results.select,
-            Ok(table) => {
-                self.table = Some(table);
+            self.result,
+            Ok(values) => {
+                self.table = Some(table::State::new(values));
             },
             Err(err) => self.set_err(err),
         );

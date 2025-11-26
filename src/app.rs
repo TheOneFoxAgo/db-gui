@@ -1,4 +1,5 @@
 mod attribution;
+mod icons;
 mod login_page;
 mod main_page;
 
