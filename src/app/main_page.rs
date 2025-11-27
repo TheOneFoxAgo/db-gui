@@ -46,9 +46,9 @@ impl Default for SelectedView {
 impl State {
     pub fn new(db: Db) -> Self {
         Self {
-            db,
             selected: SelectedView::None,
-            operations_state: Default::default(),
+            operations_state: operations::State::new(&db),
+            db,
         }
     }
     pub fn view(&mut self, ctx: &egui::Context) -> Response {
@@ -86,11 +86,7 @@ impl State {
             SelectedView::Profit => {
                 placeholder(ui);
             }
-            SelectedView::Operations => match self.operations_state.view(ui, &self.db, None) {
-                operations::Response::ShowArticle(_id) => todo!(),
-                operations::Response::ShowBalance(_id) => todo!(),
-                operations::Response::None => {}
-            },
+            SelectedView::Operations => self.operations_state.view(ui, &self.db, None),
             SelectedView::Articles => {
                 placeholder(ui);
             }
@@ -102,6 +98,9 @@ impl State {
             }
         });
         return response;
+    }
+    pub fn drive(&mut self) {
+        self.operations_state.drive();
     }
     fn left_side(&mut self, ui: &mut egui::Ui) {
         self.side_buttons(

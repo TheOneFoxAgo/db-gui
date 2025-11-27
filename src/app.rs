@@ -17,12 +17,14 @@ impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         match self {
             Self::Login(page) => {
-                if let login_page::Response::SuccessfulLogin(db) = page.view(ctx) {
+                page.view(ctx);
+                if let login_page::Response::SuccessfulLogin(db) = page.drive() {
                     *self = Self::MainPage(main_page::State::new(db));
                 }
             }
             Self::MainPage(page) => {
                 page.view(ctx);
+                page.drive();
             }
         }
     }

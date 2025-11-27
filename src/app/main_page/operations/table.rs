@@ -105,6 +105,12 @@ impl State {
         });
         response
     }
+    pub fn insert_new_row(&mut self) {
+        self.edited = Some((None, Default::default()));
+    }
+    pub fn is_changing(&self) -> bool {
+        self.edited.is_some()
+    }
     fn show_normal_row(
         ui: &mut egui::Ui,
         id: i32,

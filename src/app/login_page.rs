@@ -22,7 +22,7 @@ impl State {
             result: None,
         }
     }
-    pub fn view(&mut self, ctx: &egui::Context) -> Response {
+    pub fn view(&mut self, ctx: &egui::Context) {
         egui::TopBottomPanel::top("Login page menu").show(ctx, |ui| {
             egui::MenuBar::new().ui(ui, |ui| {
                 egui::widgets::global_theme_preference_buttons(ui);
@@ -69,11 +69,24 @@ impl State {
 
             // Сообщение об ошибке
             if let Some(error) = &self.error_message {
-                ui.label(error.to_string());
+                ui.colored_label(egui::Color32::RED, error);
             }
+
+            // Уважаем разработчиков
             attribution::pay_respect(ui);
         });
-        self.process_result()
+    }
+    pub fn drive(&mut self) -> Response {
+        drive_result_promise!(
+            self.result,
+            Ok(db) => return Response::SuccessfulLogin(db),
+            Err(err) => {
+                let message = format!("{err:?}");
+                log::error!("{}", message);
+                self.error_message = Some(message);
+            },
+        );
+        Response::None
     }
     fn handle_focus(
         &mut self,
@@ -103,18 +116,6 @@ impl State {
         } else {
             Status::Waiting
         }
-    }
-    fn process_result(&mut self) -> Response {
-        drive_result_promise!(
-            self.result,
-            Ok(db) => return Response::SuccessfulLogin(db),
-            Err(err) => {
-                let message = err.to_string();
-                log::error!("{}", message);
-                self.error_message = Some(message);
-            },
-        );
-        Response::None
     }
 }
 enum Status {

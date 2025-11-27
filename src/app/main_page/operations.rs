@@ -16,31 +16,24 @@ pub struct State {
     error_message: Option<String>,
     result: Option<PromiseLite<Result<BTreeMap<i32, OperationsRow>, Error>>>,
 }
-pub enum Response {
-    ShowArticle(i32),
-    ShowBalance(i32),
-    None,
-}
-impl Default for State {
-    fn default() -> Self {
+impl State {
+    pub fn new(db: &Db) -> Self {
         Self {
             table: None,
             error_message: None,
-            result: None,
+            result: Some(db.select_from_operations()),
         }
     }
-}
-impl State {
     pub fn view(
         &mut self,
         ui: &mut egui::Ui,
         db: &Db,
         articles: Option<&BTreeMap<i32, ArticlesRow>>,
-    ) -> Response {
+    ) {
         ui.heading("Операции");
-        let is_waiting = self.result.is_some();
+        let enabled = self.result.is_none();
         if let (Some(table), Some(articles)) = (&mut self.table, articles) {
-            if let Some(response) = table.show(ui, !is_waiting, articles) {
+            if let Some(response) = table.show(ui, enabled, articles) {
                 match response {
                     table::Response::Update(id, operations_row) => {
                         self.result = Some(db.update_in_operations(id, operations_row))
@@ -54,22 +47,29 @@ impl State {
                 }
             }
         }
-        if self.result.is_some() {
-            ui.add_enabled(false, egui::Button::new("Загружаем..."));
-        } else {
-            if ui.button("Перезагрузить!").clicked() {
+        if let Some(error) = &self.error_message {
+            ui.colored_label(egui::Color32::RED, error);
+        }
+        ui.horizontal(|ui| {
+            let insert = egui::Button::new("Добавить!");
+            if ui
+                .add_enabled(
+                    enabled && self.table.as_ref().is_some_and(|t| !t.is_changing()),
+                    insert,
+                )
+                .clicked()
+            {
+                if let Some(t) = &mut self.table {
+                    t.insert_new_row();
+                }
+            }
+            let reload = egui::Button::new("Перезагрузить!");
+            if ui.add_enabled(enabled, reload).clicked() {
                 self.result = Some(db.select_from_operations())
             }
-        }
-        self.process_results();
-        Response::None
+        });
     }
-    fn set_err(&mut self, err: impl ToString) {
-        let message = err.to_string();
-        log::error!("{}", message);
-        self.error_message = Some(message);
-    }
-    fn process_results(&mut self) {
+    pub fn drive(&mut self) {
         drive_result_promise!(
             self.result,
             Ok(values) => {
@@ -77,5 +77,10 @@ impl State {
             },
             Err(err) => self.set_err(err),
         );
+    }
+    fn set_err(&mut self, err: impl std::error::Error) {
+        let message = format!("{err:?}");
+        log::error!("{}", message);
+        self.error_message = Some(message);
     }
 }

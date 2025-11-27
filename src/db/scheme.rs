@@ -1,6 +1,6 @@
 use tokio_postgres::{Error, Row};
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Default)]
 pub struct OperationsRow {
     pub article_id: Option<i32>,
     pub balance_id: Option<i32>,
@@ -9,12 +9,12 @@ pub struct OperationsRow {
     pub create_date: Option<chrono::NaiveDateTime>,
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Default)]
 pub struct ArticlesRow {
     pub name: Option<String>,
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Default)]
 pub struct BalanceRow {
     pub debit: Option<i32>,
     pub credit: Option<i32>,
