@@ -3,7 +3,10 @@ pub mod scheme;
 
 use std::{collections::BTreeMap, sync::Arc};
 
-use crate::{db::scheme::OperationsRow, promise_lite::PromiseLite};
+use crate::{
+    db::scheme::{ArticlesRow, OperationsRow},
+    promise_lite::PromiseLite,
+};
 use tokio_postgres::Error;
 
 macro_rules! wrap {
@@ -60,5 +63,27 @@ impl Db {
         id: i32,
     ) -> PromiseLite<Result<BTreeMap<i32, OperationsRow>, Error>> {
         wrap!(self, |clone| clone.inner.delete_from_operations(id))
+    }
+    pub fn select_from_articles(&self) -> PromiseLite<Result<BTreeMap<i32, ArticlesRow>, Error>> {
+        wrap!(self, |clone| clone.inner.select_from_articles())
+    }
+    pub fn update_in_articles(
+        &self,
+        id: i32,
+        row: ArticlesRow,
+    ) -> PromiseLite<Result<BTreeMap<i32, ArticlesRow>, Error>> {
+        wrap!(self, |clone| clone.inner.update_in_articles(id, row))
+    }
+    pub fn insert_to_articles(
+        &self,
+        row: ArticlesRow,
+    ) -> PromiseLite<Result<BTreeMap<i32, ArticlesRow>, Error>> {
+        wrap!(self, |clone| clone.inner.insert_to_articles(row))
+    }
+    pub fn delete_from_articles(
+        &self,
+        id: i32,
+    ) -> PromiseLite<Result<BTreeMap<i32, ArticlesRow>, Error>> {
+        wrap!(self, |clone| clone.inner.delete_from_articles(id))
     }
 }

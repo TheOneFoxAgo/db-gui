@@ -14,7 +14,8 @@ use crate::db::Db;
 pub struct State {
     db: Db,
     selected: SelectedView,
-    pub operations_state: operations::State,
+    operations_state: operations::State,
+    articles_state: articles::State,
 }
 
 pub enum Response {
@@ -48,6 +49,7 @@ impl State {
         Self {
             selected: SelectedView::None,
             operations_state: operations::State::new(&db),
+            articles_state: articles::State::new(&db),
             db,
         }
     }
@@ -86,10 +88,12 @@ impl State {
             SelectedView::Profit => {
                 placeholder(ui);
             }
-            SelectedView::Operations => self.operations_state.view(ui, &self.db, None),
-            SelectedView::Articles => {
-                placeholder(ui);
+            SelectedView::Operations => {
+                self.operations_state
+                    .view(ui, &self.db, self.articles_state.table())
             }
+            SelectedView::Articles => self.articles_state.view(ui, &self.db),
+
             SelectedView::Balance => {
                 placeholder(ui);
             }
@@ -101,6 +105,7 @@ impl State {
     }
     pub fn drive(&mut self) {
         self.operations_state.drive();
+        self.articles_state.drive();
     }
     fn left_side(&mut self, ui: &mut egui::Ui) {
         self.side_buttons(
@@ -140,11 +145,8 @@ impl State {
     }
 }
 
-pub fn option_to_string(option: Option<&impl ToString>) -> Cow<'_, str> {
-    match option {
-        Some(val) => Cow::Owned(val.to_string()),
-        None => Cow::Borrowed(""),
-    }
+pub fn option_to_string(option: Option<&impl ToString>) -> String {
+    option.map(|f| f.to_string()).unwrap_or_default()
 }
 pub fn option_to_string_with<'a>(option: Option<&impl ToString>, default: &'a str) -> Cow<'a, str> {
     match option {

@@ -1,18 +1,15 @@
 use crate::{
-    app::{
-        icons,
-        main_page::{option_to_string, option_to_string_with},
-    },
-    db::scheme::{ArticlesRow, OperationsRow},
+    app::{icons, main_page::option_to_string},
+    db::scheme::ArticlesRow,
 };
 use std::collections::BTreeMap;
 pub struct State {
-    values: BTreeMap<i32, OperationsRow>,
-    edited: Option<(Option<i32>, OperationsRow)>,
+    values: BTreeMap<i32, ArticlesRow>,
+    edited: Option<(Option<i32>, ArticlesRow)>,
 }
 pub enum Response {
-    Update(i32, OperationsRow),
-    Insert(OperationsRow),
+    Update(i32, ArticlesRow),
+    Insert(ArticlesRow),
     Delete(i32),
 }
 enum Edited {
@@ -24,28 +21,15 @@ enum Regular {
     Delete,
 }
 impl State {
-    pub fn new(values: BTreeMap<i32, OperationsRow>) -> Self {
+    pub fn new(values: BTreeMap<i32, ArticlesRow>) -> Self {
         Self {
             values,
             edited: None,
         }
     }
-    pub fn show(
-        &mut self,
-        ui: &mut egui::Ui,
-        edit_enabled: bool,
-        articles: &BTreeMap<i32, ArticlesRow>,
-    ) -> Option<Response> {
+    pub fn show(&mut self, ui: &mut egui::Ui, edit_enabled: bool) -> Option<Response> {
         let mut response = None;
-        let headers = [
-            "id",
-            "article_id",
-            "debit",
-            "credit",
-            "create_date",
-            "balance_id",
-            "Операции",
-        ];
+        let headers = ["id", "name", "Операции"];
         let regular_enabled = edit_enabled && self.edited.is_none();
         egui::containers::ScrollArea::new([true, true]).show(ui, |ui| {
             egui::Grid::new("Operations")
@@ -59,13 +43,9 @@ impl State {
                         if let Some((Some(target), edited_row)) = &mut self.edited
                             && *target == *id
                         {
-                            if let Some(inner_response) = Self::show_edited_row(
-                                ui,
-                                Some(*target),
-                                edited_row,
-                                edit_enabled,
-                                articles,
-                            ) {
+                            if let Some(inner_response) =
+                                Self::show_edited_row(ui, Some(*target), edited_row, edit_enabled)
+                            {
                                 match inner_response {
                                     Edited::Confirm => {
                                         response = Some(Response::Update(*id, edited_row.clone()))
@@ -77,7 +57,7 @@ impl State {
                             }
                         } else {
                             if let Some(inner_response) =
-                                Self::show_normal_row(ui, *id, row, regular_enabled, articles)
+                                Self::show_normal_row(ui, *id, row, regular_enabled)
                             {
                                 match inner_response {
                                     Regular::Edit => self.edited = Some((Some(*id), row.clone())),
@@ -89,7 +69,7 @@ impl State {
                     }
                     if let Some((None, edited_row)) = &mut self.edited {
                         if let Some(inner_response) =
-                            Self::show_edited_row(ui, None, edited_row, edit_enabled, articles)
+                            Self::show_edited_row(ui, None, edited_row, edit_enabled)
                         {
                             match inner_response {
                                 Edited::Confirm => {
@@ -111,19 +91,17 @@ impl State {
     pub fn is_changing(&self) -> bool {
         self.edited.is_some()
     }
+    pub fn inner(&self) -> &BTreeMap<i32, ArticlesRow> {
+        &self.values
+    }
     fn show_normal_row(
         ui: &mut egui::Ui,
         id: i32,
-        row: &OperationsRow,
+        row: &ArticlesRow,
         enabled: bool,
-        articles: &BTreeMap<i32, ArticlesRow>,
     ) -> Option<Regular> {
         ui.label(id.to_string());
-        ui.label(Self::format_from_articles(row.article_id, articles));
-        ui.label(option_to_string(row.debit.as_ref()));
-        ui.label(option_to_string(row.credit.as_ref()));
-        ui.label(option_to_string(row.create_date.as_ref()));
-        ui.label(option_to_string_with(row.balance_id.as_ref(), "[null]"));
+        ui.label(option_to_string(row.name.as_ref()));
         let mut response = None;
         ui.horizontal(|ui| {
             let edit = egui::Button::new(icons::EDIT).small();
@@ -140,55 +118,15 @@ impl State {
     fn show_edited_row(
         ui: &mut egui::Ui,
         id: Option<i32>,
-        edited_row: &mut OperationsRow,
+        edited_row: &mut ArticlesRow,
         enabled: bool,
-        articles: &BTreeMap<i32, ArticlesRow>,
     ) -> Option<Edited> {
         ui.label(option_to_string(id.as_ref()));
-        egui::ComboBox::from_id_salt("choose article")
-            .selected_text(Self::format_from_articles(edited_row.article_id, articles))
-            .show_ui(ui, |ui| {
-                if enabled {
-                    for (id, article) in articles {
-                        ui.selectable_value(
-                            &mut edited_row.article_id,
-                            Some(*id),
-                            Self::format_article(*id, article),
-                        );
-                    }
-                }
-            });
-        let mut debit = edited_row.debit.unwrap_or(0);
-        if ui
-            .add_enabled(enabled, egui::DragValue::new(&mut debit).speed(0.5))
-            .changed()
-        {
-            edited_row.debit = Some(debit);
-        }
+        ui.add_enabled(
+            enabled,
+            egui::TextEdit::singleline(edited_row.name.get_or_insert_default()),
+        );
 
-        let mut credit = edited_row.credit.unwrap_or(0);
-        if ui
-            .add_enabled(enabled, egui::DragValue::new(&mut credit).speed(0.5))
-            .changed()
-        {
-            edited_row.credit = Some(credit);
-        }
-
-        let mut create_date = edited_row.create_date.map(|t| t.date()).unwrap_or_default();
-        if ui
-            .add_enabled(
-                enabled,
-                egui_extras::DatePickerButton::new(&mut create_date),
-            )
-            .changed()
-        {
-            edited_row.create_date = Some(create_date.into());
-        }
-
-        ui.label(option_to_string_with(
-            edited_row.balance_id.as_ref(),
-            "[null]",
-        ));
         let mut response = None;
         ui.horizontal(|ui| {
             let confirm = egui::Button::new(icons::CONFIRM).small();
@@ -201,16 +139,5 @@ impl State {
             }
         });
         response
-    }
-    fn format_from_articles(id: Option<i32>, articles: &BTreeMap<i32, ArticlesRow>) -> String {
-        if let Some(id) = id {
-            if let Some(article) = articles.get(&id) {
-                return Self::format_article(id, article);
-            }
-        }
-        "".into()
-    }
-    fn format_article(id: i32, article: &ArticlesRow) -> String {
-        format!("{id} ({})", option_to_string(article.name.as_ref()))
     }
 }

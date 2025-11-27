@@ -23,8 +23,11 @@ impl eframe::App for App {
                 }
             }
             Self::MainPage(page) => {
-                page.view(ctx);
-                page.drive();
+                if let main_page::Response::Exit = page.view(ctx) {
+                    *self = Self::Login(login_page::State::new())
+                } else {
+                    page.drive();
+                }
             }
         }
     }
@@ -63,7 +66,7 @@ macro_rules! drive_result_promise {
         Err($err:ident) => $handle:expr,
         JoinErr($jerr:ident) => $jhandle:expr $(,)*
     ) => {
-        super::drive_promise!(
+        crate::app::drive_promise!(
             $promise,
             Ok(res) => match res {
                 Ok($res) => $action,

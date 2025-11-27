@@ -1,5 +1,7 @@
 use std::collections::BTreeMap;
 
+use crate::db::scheme::ArticlesRow;
+
 use super::scheme::OperationsRow;
 use futures_util::TryStreamExt;
 use tokio_postgres::{
@@ -134,16 +136,41 @@ impl Inner {
             .await?;
         self.select_from_operations().await
     }
-    async fn prepare_select_from_operations(client: &Client) -> Result<Statement, Error> {
-        client
-            .prepare(
-                "SELECT ops.id, ops.article_id, art.name AS article_name, \
-                        ops.debit, ops.credit, ops.create_date, ops.balance_id \
-                FROM public.operations ops \
-                LEFT JOIN public.articles art \
-                ON ops.article_id = art.id",
-            )
+    pub async fn select_from_articles(&self) -> Result<BTreeMap<i32, ArticlesRow>, Error> {
+        self.client
+            .query_raw(&self.select_from_articles, NO_PARAMS)
+            .await?
+            .map_ok(|r| ArticlesRow::new(r).unwrap())
+            .try_collect()
             .await
+    }
+    pub async fn insert_to_articles(
+        &self,
+        row: ArticlesRow,
+    ) -> Result<BTreeMap<i32, ArticlesRow>, Error> {
+        self.client
+            .execute(&self.insert_to_articles, &[&row.name])
+            .await?;
+        self.select_from_articles().await
+    }
+    pub async fn update_in_articles(
+        &self,
+        id: i32,
+        row: ArticlesRow,
+    ) -> Result<BTreeMap<i32, ArticlesRow>, Error> {
+        self.client
+            .execute(&self.update_in_articles, &[&id, &row.name])
+            .await?;
+        self.select_from_articles().await
+    }
+    pub async fn delete_from_articles(&self, id: i32) -> Result<BTreeMap<i32, ArticlesRow>, Error> {
+        self.client
+            .execute(&self.delete_from_articles, &[&id])
+            .await?;
+        self.select_from_articles().await
+    }
+    async fn prepare_select_from_operations(client: &Client) -> Result<Statement, Error> {
+        client.prepare("SELECT * FROM public.operations").await
     }
     async fn prepare_select_from_articles(client: &Client) -> Result<Statement, Error> {
         client.prepare("SELECT * FROM public.articles").await
