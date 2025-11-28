@@ -32,7 +32,7 @@ impl State {
         let headers = ["id", "name", "Операции"];
         let regular_enabled = edit_enabled && self.edited.is_none();
         egui::containers::ScrollArea::new([true, true]).show(ui, |ui| {
-            egui::Grid::new("Operations")
+            egui::Grid::new("Articles")
                 .num_columns(headers.len())
                 .show(ui, |ui| {
                     for header in headers {

@@ -39,6 +39,7 @@ impl State {
                         self.result = Some(db.update_in_operations(id, operations_row))
                     }
                     table::Response::Delete(id) => {
+                        log::info!("Удаляем ряд с id: {}", id);
                         self.result = Some(db.delete_from_operations(id))
                     }
                     table::Response::Insert(operations_row) => {
@@ -46,9 +47,6 @@ impl State {
                     }
                 }
             }
-        }
-        if let Some(error) = &self.error_message {
-            ui.colored_label(egui::Color32::RED, error);
         }
         ui.horizontal(|ui| {
             let insert = egui::Button::new("Добавить!");
@@ -68,12 +66,16 @@ impl State {
                 self.result = Some(db.select_from_operations())
             }
         });
+        if let Some(error) = &self.error_message {
+            ui.colored_label(egui::Color32::RED, error);
+        }
     }
     pub fn drive(&mut self) {
         drive_result_promise!(
             self.result,
             Ok(values) => {
                 self.table = Some(table::State::new(values));
+                self.error_message = None;
             },
             Err(err) => self.set_err(err),
         );

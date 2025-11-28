@@ -4,7 +4,7 @@ pub mod scheme;
 use std::{collections::BTreeMap, sync::Arc};
 
 use crate::{
-    db::scheme::{ArticlesRow, OperationsRow},
+    db::scheme::{ArticlesRow, BalanceRow, OperationsRow},
     promise_lite::PromiseLite,
 };
 use tokio_postgres::Error;
@@ -85,5 +85,14 @@ impl Db {
         id: i32,
     ) -> PromiseLite<Result<BTreeMap<i32, ArticlesRow>, Error>> {
         wrap!(self, |clone| clone.inner.delete_from_articles(id))
+    }
+    pub fn select_from_balance(&self) -> PromiseLite<Result<BTreeMap<i32, BalanceRow>, Error>> {
+        wrap!(self, |clone| clone.inner.select_from_balance())
+    }
+    pub fn create_balance(&self) -> PromiseLite<Result<BTreeMap<i32, BalanceRow>, Error>> {
+        wrap!(self, |clone| clone.inner.create_balance())
+    }
+    pub fn remove_balance(&self) -> PromiseLite<Result<BTreeMap<i32, BalanceRow>, Error>> {
+        wrap!(self, |clone| clone.inner.remove_balance())
     }
 }

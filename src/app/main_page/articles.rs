@@ -37,9 +37,6 @@ impl State {
                 }
             }
         }
-        if let Some(error) = &self.error_message {
-            ui.colored_label(egui::Color32::RED, error);
-        }
         ui.horizontal(|ui| {
             let insert = egui::Button::new("Добавить!");
             if ui
@@ -58,12 +55,16 @@ impl State {
                 self.result = Some(db.select_from_articles())
             }
         });
+        if let Some(error) = &self.error_message {
+            ui.colored_label(egui::Color32::RED, error);
+        }
     }
     pub fn drive(&mut self) {
         drive_result_promise!(
             self.result,
             Ok(values) => {
                 self.table = Some(table::State::new(values));
+                self.error_message = None;
             },
             Err(err) => self.set_err(err),
         );

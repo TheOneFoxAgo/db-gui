@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use crate::db::scheme::ArticlesRow;
+use crate::db::scheme::{ArticlesRow, BalanceRow};
 
 use super::scheme::OperationsRow;
 use futures_util::TryStreamExt;
@@ -24,8 +24,8 @@ pub struct Inner {
 
     delete_from_operations: Statement,
     delete_from_articles: Statement,
-    // create_balance: Statement,
-    // remove_balance: Statement,
+    create_balance: Statement,
+    remove_balance: Statement,
     // show_percents: Statement,
     // show_dynamics: Statement,
     // show_profit: Statement,
@@ -54,8 +54,8 @@ impl Inner {
             update_in_articles,
             delete_from_operations,
             delete_from_articles,
-            // create_balance,
-            // remove_balance,
+            create_balance,
+            remove_balance,
         ) = tokio::try_join!(
             Self::prepare_select_from_operations(&client),
             Self::prepare_select_from_articles(&client),
@@ -66,8 +66,8 @@ impl Inner {
             Self::prepare_update_in_articles(&client),
             Self::prepare_delete_from_operations(&client),
             Self::prepare_delete_from_articles(&client),
-            // Self::prepare_create_balance(&client),
-            // Self::prepare_remove_balance(&client),
+            Self::prepare_create_balance(&client),
+            Self::prepare_remove_balance(&client),
         )?;
         Ok(Self {
             user,
@@ -81,8 +81,8 @@ impl Inner {
             update_in_articles,
             delete_from_operations,
             delete_from_articles,
-            // create_balance,
-            // remove_balance,
+            create_balance,
+            remove_balance,
         })
     }
     pub fn user(&self) -> &str {
@@ -169,6 +169,22 @@ impl Inner {
             .await?;
         self.select_from_articles().await
     }
+    pub async fn select_from_balance(&self) -> Result<BTreeMap<i32, BalanceRow>, Error> {
+        self.client
+            .query_raw(&self.select_from_balance, NO_PARAMS)
+            .await?
+            .map_ok(|r| BalanceRow::new(r).unwrap())
+            .try_collect()
+            .await
+    }
+    pub async fn create_balance(&self) -> Result<BTreeMap<i32, BalanceRow>, Error> {
+        self.client.execute(&self.create_balance, &[]).await?;
+        self.select_from_balance().await
+    }
+    pub async fn remove_balance(&self) -> Result<BTreeMap<i32, BalanceRow>, Error> {
+        self.client.execute(&self.remove_balance, &[]).await?;
+        self.select_from_balance().await
+    }
     async fn prepare_select_from_operations(client: &Client) -> Result<Statement, Error> {
         client.prepare("SELECT * FROM public.operations").await
     }
@@ -233,12 +249,47 @@ impl Inner {
             .prepare_typed("DELETE FROM public.articles WHERE id = $1", &[Type::INT4])
             .await
     }
-    // async fn prepare_create_balance(client: &Client) -> Result<Statement, Error> {
-    //     todo!()
-    // }
-    // async fn prepare_remove_balance(client: &Client) -> Result<Statement, Error> {
-    //     todo!()
-    // }
+    async fn prepare_create_balance(client: &Client) -> Result<Statement, Error> {
+        client
+            .prepare_typed(
+                "WITH new_balance AS ( \
+                	INSERT INTO public.balance( \
+                	create_date, debit, credit, amount) \
+                	SELECT CURRENT_TIMESTAMP, \
+                	SUM(ops.debit), SUM(ops.credit), \
+                	SUM(ops.debit) - SUM(ops.credit) \
+                	FROM public.operations ops WHERE ops.balance_id is NULL \
+                	RETURNING id \
+                ) \
+                UPDATE public.operations \
+                SET balance_id=(SELECT * FROM new_balance) \
+                WHERE balance_id IS NULL",
+                &[],
+            )
+            .await
+    }
+    async fn prepare_remove_balance(client: &Client) -> Result<Statement, Error> {
+        client
+            .prepare_typed(
+                "WITH deleted_balance AS ( \
+                	DELETE FROM public.balance \
+                	WHERE id=( \
+                		SELECT id FROM public.balance \
+                		WHERE create_date=( \
+                			SELECT MAX(create_date) \
+                			FROM public.balance \
+                		) \
+                		LIMIT 1 \
+                	) \
+                	RETURNING id \
+                ) \
+                UPDATE public.operations \
+                SET balance_id = NULL \
+                WHERE balance_id=(SELECT * FROM deleted_balance)",
+                &[],
+            )
+            .await
+    }
 }
 
 // Говорим системе типов замолчать, когда взрослые разговаривают

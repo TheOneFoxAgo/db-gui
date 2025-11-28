@@ -1,3 +1,5 @@
+use chrono::Local;
+
 use crate::{
     app::{
         icons,
@@ -174,7 +176,10 @@ impl State {
             edited_row.credit = Some(credit);
         }
 
-        let mut create_date = edited_row.create_date.map(|t| t.date()).unwrap_or_default();
+        let mut create_date = edited_row
+            .create_date
+            .map(|t| t.date())
+            .unwrap_or_else(|| Local::now().date_naive());
         if ui
             .add_enabled(
                 enabled,

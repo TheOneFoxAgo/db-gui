@@ -16,6 +16,7 @@ pub struct State {
     selected: SelectedView,
     operations_state: operations::State,
     articles_state: articles::State,
+    balance_state: balance::State,
 }
 
 pub enum Response {
@@ -47,9 +48,10 @@ impl Default for SelectedView {
 impl State {
     pub fn new(db: Db) -> Self {
         Self {
-            selected: SelectedView::None,
+            selected: SelectedView::Operations,
             operations_state: operations::State::new(&db),
             articles_state: articles::State::new(&db),
+            balance_state: balance::State::new(&db),
             db,
         }
     }
@@ -57,26 +59,19 @@ impl State {
         let mut response = Response::None;
         egui::TopBottomPanel::top("Main page menu").show(ctx, |ui| {
             egui::MenuBar::new().ui(ui, |ui| {
-                egui::Sides::new().show(
-                    ui,
-                    // Слева
-                    |ui| {
-                        egui::widgets::global_theme_preference_buttons(ui);
-                    },
-                    // Справа
-                    |ui| {
-                        if ui.button("Выйти").clicked() {
-                            response = Response::Exit;
-                        }
-                        ui.label(self.db.user());
-                        ui.label("Пользователь:");
-                        // Обратный порядок виджетов, из-за ограничений immediate-mode
-                    },
-                )
+                egui::widgets::global_theme_preference_buttons(ui);
+                ui.add_space(50.0);
+                ui.label("Пользователь:");
+                ui.label(self.db.user());
+                if ui.button("Выйти").clicked() {
+                    response = Response::Exit;
+                }
             });
         });
-        egui::SidePanel::left("Tables").show(ctx, |ui| self.left_side(ui));
-        egui::SidePanel::right("Indicators").show(ctx, |ui| self.right_side(ui));
+        egui::SidePanel::left("Tables").show(ctx, |ui| {
+            self.tables_selectors(ui);
+            self.indicator_selectors(ui);
+        });
         let placeholder = |ui: &mut egui::Ui| ui.heading("Not implemented");
         egui::CentralPanel::default().show(ctx, |ui| match &self.selected {
             SelectedView::Dynamics => {
@@ -95,7 +90,7 @@ impl State {
             SelectedView::Articles => self.articles_state.view(ui, &self.db),
 
             SelectedView::Balance => {
-                placeholder(ui);
+                self.balance_state.view(ui, &self.db);
             }
             SelectedView::None => {
                 placeholder(ui);
@@ -106,8 +101,9 @@ impl State {
     pub fn drive(&mut self) {
         self.operations_state.drive();
         self.articles_state.drive();
+        self.balance_state.drive();
     }
-    fn left_side(&mut self, ui: &mut egui::Ui) {
+    fn tables_selectors(&mut self, ui: &mut egui::Ui) {
         self.side_buttons(
             "Таблицы",
             &[
@@ -118,7 +114,7 @@ impl State {
             ui,
         );
     }
-    fn right_side(&mut self, ui: &mut egui::Ui) {
+    fn indicator_selectors(&mut self, ui: &mut egui::Ui) {
         self.side_buttons(
             "Индикаторы",
             &[
