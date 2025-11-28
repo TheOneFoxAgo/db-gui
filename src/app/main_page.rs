@@ -1,8 +1,8 @@
 mod articles;
 mod balance;
-mod dynamics;
+// mod dynamics;
 mod operations;
-mod percents;
+// mod percents;
 mod profit;
 
 use std::borrow::Cow;
@@ -17,6 +17,7 @@ pub struct State {
     operations_state: operations::State,
     articles_state: articles::State,
     balance_state: balance::State,
+    profit_state: profit::State,
 }
 
 pub enum Response {
@@ -52,6 +53,7 @@ impl State {
             operations_state: operations::State::new(&db),
             articles_state: articles::State::new(&db),
             balance_state: balance::State::new(&db),
+            profit_state: profit::State::new(&db),
             db,
         }
     }
@@ -70,6 +72,7 @@ impl State {
         });
         egui::SidePanel::left("Tables").show(ctx, |ui| {
             self.tables_selectors(ui);
+            ui.add_space(20.0);
             self.indicator_selectors(ui);
         });
         let placeholder = |ui: &mut egui::Ui| ui.heading("Not implemented");
@@ -81,7 +84,7 @@ impl State {
                 placeholder(ui);
             }
             SelectedView::Profit => {
-                placeholder(ui);
+                self.profit_state.view(ui, &self.db);
             }
             SelectedView::Operations => {
                 self.operations_state
@@ -102,6 +105,7 @@ impl State {
         self.operations_state.drive();
         self.articles_state.drive();
         self.balance_state.drive();
+        self.profit_state.drive();
     }
     fn tables_selectors(&mut self, ui: &mut egui::Ui) {
         self.side_buttons(

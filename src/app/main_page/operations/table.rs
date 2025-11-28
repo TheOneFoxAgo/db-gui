@@ -1,4 +1,4 @@
-use chrono::Local;
+use chrono::{Local, NaiveTime};
 
 use crate::{
     app::{
@@ -161,34 +161,24 @@ impl State {
                 }
             });
         let mut debit = edited_row.debit.unwrap_or(0);
-        if ui
-            .add_enabled(enabled, egui::DragValue::new(&mut debit).speed(0.5))
-            .changed()
-        {
-            edited_row.debit = Some(debit);
-        }
+        ui.add_enabled(enabled, egui::DragValue::new(&mut debit).speed(0.5));
+        edited_row.debit = Some(debit);
 
         let mut credit = edited_row.credit.unwrap_or(0);
-        if ui
-            .add_enabled(enabled, egui::DragValue::new(&mut credit).speed(0.5))
-            .changed()
-        {
-            edited_row.credit = Some(credit);
-        }
+        ui.add_enabled(enabled, egui::DragValue::new(&mut credit).speed(0.5));
+        edited_row.credit = Some(credit);
 
-        let mut create_date = edited_row
-            .create_date
-            .map(|t| t.date())
-            .unwrap_or_else(|| Local::now().date_naive());
-        if ui
-            .add_enabled(
-                enabled,
-                egui_extras::DatePickerButton::new(&mut create_date),
-            )
-            .changed()
-        {
-            edited_row.create_date = Some(create_date.into());
-        }
+        let mut create_date = edited_row.create_date.map(|t| t.date()).unwrap_or_else(|| {
+            Local::now()
+                .with_time(NaiveTime::from_hms_opt(0, 0, 0).unwrap())
+                .unwrap()
+                .date_naive()
+        });
+        ui.add_enabled(
+            enabled,
+            egui_extras::DatePickerButton::new(&mut create_date),
+        );
+        edited_row.create_date = Some(create_date.into());
 
         ui.label(option_to_string_with(
             edited_row.balance_id.as_ref(),

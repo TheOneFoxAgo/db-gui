@@ -1,9 +1,10 @@
 use std::collections::BTreeMap;
 
-use crate::db::scheme::{ArticlesRow, BalanceRow};
+use crate::db::scheme::{ArticlesRow, BalanceRow, DynamicsPoint, PercentsBar, ProfitPoint};
 
 use super::scheme::OperationsRow;
-use futures_util::TryStreamExt;
+use chrono::NaiveDateTime;
+use futures_util::{StreamExt, TryStreamExt};
 use tokio_postgres::{
     Client, Config, Error, NoTls, Statement,
     types::{ToSql, Type},
@@ -26,9 +27,9 @@ pub struct Inner {
     delete_from_articles: Statement,
     create_balance: Statement,
     remove_balance: Statement,
-    // show_percents: Statement,
-    // show_dynamics: Statement,
-    // show_profit: Statement,
+    show_percents: Statement,
+    show_dynamics: Statement,
+    show_profit: Statement,
 }
 impl Inner {
     pub async fn new(user: String, password: String) -> Result<Self, Error> {
@@ -56,6 +57,9 @@ impl Inner {
             delete_from_articles,
             create_balance,
             remove_balance,
+            show_percents,
+            show_dynamics,
+            show_profit,
         ) = tokio::try_join!(
             Self::prepare_select_from_operations(&client),
             Self::prepare_select_from_articles(&client),
@@ -68,6 +72,9 @@ impl Inner {
             Self::prepare_delete_from_articles(&client),
             Self::prepare_create_balance(&client),
             Self::prepare_remove_balance(&client),
+            Self::prepare_show_percents(&client),
+            Self::prepare_show_dynamics(&client),
+            Self::prepare_show_profit(&client),
         )?;
         Ok(Self {
             user,
@@ -83,6 +90,9 @@ impl Inner {
             delete_from_articles,
             create_balance,
             remove_balance,
+            show_percents,
+            show_dynamics,
+            show_profit,
         })
     }
     pub fn user(&self) -> &str {
@@ -92,7 +102,8 @@ impl Inner {
         self.client
             .query_raw(&self.select_from_operations, NO_PARAMS)
             .await?
-            .map_ok(|r| OperationsRow::new(r).unwrap())
+            .map_ok(|r| OperationsRow::new(r))
+            .map(|r| r.flatten())
             .try_collect()
             .await
     }
@@ -140,7 +151,8 @@ impl Inner {
         self.client
             .query_raw(&self.select_from_articles, NO_PARAMS)
             .await?
-            .map_ok(|r| ArticlesRow::new(r).unwrap())
+            .map_ok(|r| ArticlesRow::new(r))
+            .map(|r| r.flatten())
             .try_collect()
             .await
     }
@@ -173,7 +185,8 @@ impl Inner {
         self.client
             .query_raw(&self.select_from_balance, NO_PARAMS)
             .await?
-            .map_ok(|r| BalanceRow::new(r).unwrap())
+            .map_ok(|r| BalanceRow::new(r))
+            .map(|r| r.flatten())
             .try_collect()
             .await
     }
@@ -184,6 +197,39 @@ impl Inner {
     pub async fn remove_balance(&self) -> Result<BTreeMap<i32, BalanceRow>, Error> {
         self.client.execute(&self.remove_balance, &[]).await?;
         self.select_from_balance().await
+    }
+    pub async fn show_percents(&self) -> Result<Vec<PercentsBar>, Error> {
+        self.client
+            .query_raw(&self.show_percents, NO_PARAMS)
+            .await?
+            .map_ok(|r| PercentsBar::new(r))
+            .map(|r| r.flatten())
+            .try_collect()
+            .await
+    }
+    pub async fn show_profit(&self) -> Result<Vec<ProfitPoint>, Error> {
+        self.client
+            .query_raw(&self.show_profit, NO_PARAMS)
+            .await?
+            .map_ok(|r| ProfitPoint::new(r))
+            .map(|r| r.flatten())
+            .try_collect()
+            .await
+    }
+    pub async fn show_dynamics(
+        &self,
+        articles: Vec<i32>,
+        start: NaiveDateTime,
+        end: NaiveDateTime,
+    ) -> Result<Vec<DynamicsPoint>, Error> {
+        let params: [&(dyn ToSql + Sync); _] = [&articles, &start, &end];
+        self.client
+            .query_raw(&self.show_dynamics, params)
+            .await?
+            .map_ok(|r| DynamicsPoint::new(r))
+            .map(|r| r.flatten())
+            .try_collect()
+            .await
     }
     async fn prepare_select_from_operations(client: &Client) -> Result<Statement, Error> {
         client.prepare("SELECT * FROM public.operations").await
@@ -286,6 +332,58 @@ impl Inner {
                 UPDATE public.operations \
                 SET balance_id = NULL \
                 WHERE balance_id=(SELECT * FROM deleted_balance)",
+                &[],
+            )
+            .await
+    }
+    async fn prepare_show_percents(client: &Client) -> Result<Statement, Error> {
+        client
+            .prepare_typed(
+                "WITH totals AS ( \
+                	SELECT SUM(ops.debit) AS debit, \
+                	SUM(ops.credit) AS credit \
+                	FROM public.operations ops \
+                ) \
+                SELECT art.id, \
+                	100.0 * SUM(ops.debit) / \
+                		NULLIF((SELECT debit FROM totals), 0) AS debit, \
+                	100.0 * SUM(ops.credit) / \
+                		NULLIF((SELECT credit FROM totals), 0) AS credit \
+                FROM public.operations ops \
+                RIGHT JOIN public.articles art \
+                ON art.id = ops.article_id \
+                GROUP BY art.id \
+                ORDER BY art.id ASC",
+                &[],
+            )
+            .await
+    }
+    async fn prepare_show_dynamics(client: &Client) -> Result<Statement, Error> {
+        client
+            .prepare_typed(
+                "SELECT ops.create_date AS create_date, \
+                SUM(ops.debit) AS debit, \
+                SUM(ops.credit) AS credit \
+                FROM public.operations ops \
+                WHERE ops.article_id = ANY($1) \
+                AND ops.create_date \
+                BETWEEN $2 AND $3 \
+                GROUP BY ops.create_date",
+                &[Type::INT4_ARRAY, Type::TIMESTAMP, Type::TIMESTAMP],
+            )
+            .await
+    }
+    async fn prepare_show_profit(client: &Client) -> Result<Statement, Error> {
+        client
+            .prepare_typed(
+                "SELECT ops.create_date AS create_date, \
+                CAST( \
+                    SUM(SUM(ops.debit) - SUM(ops.credit)) \
+                    OVER (ORDER BY ops.create_date) \
+                    AS DOUBLE PRECISION \
+                ) AS profit \
+                FROM public.operations ops \
+                GROUP BY ops.create_date",
                 &[],
             )
             .await

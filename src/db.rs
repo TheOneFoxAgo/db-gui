@@ -4,9 +4,10 @@ pub mod scheme;
 use std::{collections::BTreeMap, sync::Arc};
 
 use crate::{
-    db::scheme::{ArticlesRow, BalanceRow, OperationsRow},
+    db::scheme::{ArticlesRow, BalanceRow, DynamicsPoint, OperationsRow, PercentsBar, ProfitPoint},
     promise_lite::PromiseLite,
 };
+use chrono::NaiveDate;
 use tokio_postgres::Error;
 
 macro_rules! wrap {
@@ -94,5 +95,22 @@ impl Db {
     }
     pub fn remove_balance(&self) -> PromiseLite<Result<BTreeMap<i32, BalanceRow>, Error>> {
         wrap!(self, |clone| clone.inner.remove_balance())
+    }
+    pub fn show_percents(&self) -> PromiseLite<Result<Vec<PercentsBar>, Error>> {
+        wrap!(self, |clone| clone.inner.show_percents())
+    }
+    pub fn show_profit(&self) -> PromiseLite<Result<Vec<ProfitPoint>, Error>> {
+        wrap!(self, |clone| clone.inner.show_profit())
+    }
+    pub fn show_dynamics(
+        &self,
+        articles: Vec<i32>,
+        start: NaiveDate,
+        end: NaiveDate,
+    ) -> PromiseLite<Result<Vec<DynamicsPoint>, Error>> {
+        let (start, end) = (start.into(), end.into());
+        wrap!(self, |clone| clone
+            .inner
+            .show_dynamics(articles, start, end))
     }
 }
