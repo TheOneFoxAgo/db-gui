@@ -374,7 +374,8 @@ impl Inner {
                 WHERE ops.article_id = ANY($1) \
                 AND ops.create_date \
                 BETWEEN $2 AND $3 \
-                GROUP BY ops.create_date",
+                GROUP BY ops.create_date \
+                ORDER BY ops.create_date ASC",
                 &[Type::INT4_ARRAY, Type::TIMESTAMP, Type::TIMESTAMP],
             )
             .await

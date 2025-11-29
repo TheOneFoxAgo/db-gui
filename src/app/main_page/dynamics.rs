@@ -51,10 +51,12 @@ impl State {
         if let Some(articles) = articles {
             egui::containers::ScrollArea::new([true, true]).show(ui, |ui| {
                 let size = ui.available_height();
-                Self::table(ui, articles, &mut self.chosen_articles);
-                if let Some(values) = &self.values {
-                    Self::plot(ui, values.clone(), size / 2.0);
-                }
+                ui.horizontal(|ui| {
+                    Self::table(ui, articles, &mut self.chosen_articles);
+                    if let Some(values) = &self.values {
+                        Self::plot(ui, values.clone(), size / 2.0);
+                    }
+                })
             });
         }
         ui.horizontal(|ui| {
@@ -99,48 +101,49 @@ impl State {
                 ui.label(i.to_string());
                 ui.label(option_to_string(article.name.as_ref()));
                 let mut checked = chosen.contains(i);
-                ui.checkbox(&mut checked, "");
-                if checked {
-                    chosen.insert(*i);
+                if ui.checkbox(&mut checked, "").changed() {
+                    if checked {
+                        chosen.insert(*i);
+                    } else {
+                        chosen.remove(i);
+                    }
                 }
                 ui.end_row();
             }
         });
     }
     fn plot(ui: &mut egui::Ui, values: Points, size: f32) {
-        ui.horizontal(|ui| {
-            egui_plot::Plot::new("Profit")
-                .height(size)
-                .clamp_grid(true)
-                .x_axis_label("Время")
-                .x_axis_formatter(|_, _| "".into())
-                .y_axis_label("Деньги")
-                .label_formatter(|_, point| {
-                    format!(
-                        "Время: {}\nДеньги: {}",
-                        DateTime::from_timestamp(point.x as i64, 0)
-                            .map(|d| d.to_string())
-                            .unwrap_or_default(),
-                        point.y
-                    )
-                })
-                .show(ui, |plot_ui| {
-                    let debit_color = Color32::RED;
-                    let credit_color = Color32::BLUE;
-                    let debit = egui_plot::Line::new(
-                        "Прибыль от времени",
-                        PlotPoints::Borrowed(&values.debits),
-                    )
-                    .color(debit_color);
-                    let credit = egui_plot::Line::new(
-                        "Расходы от времени",
-                        PlotPoints::Borrowed(&values.credits),
-                    )
-                    .color(credit_color);
-                    plot_ui.line(debit);
-                    plot_ui.line(credit);
-                })
-        });
+        egui_plot::Plot::new("Profit")
+            .height(size)
+            .clamp_grid(true)
+            .x_axis_label("Время")
+            .x_axis_formatter(|_, _| "".into())
+            .y_axis_label("Деньги")
+            .label_formatter(|_, point| {
+                format!(
+                    "Время: {}\nДеньги: {}",
+                    DateTime::from_timestamp(point.x as i64, 0)
+                        .map(|d| d.to_string())
+                        .unwrap_or_default(),
+                    point.y
+                )
+            })
+            .show(ui, |plot_ui| {
+                let debit_color = Color32::RED;
+                let credit_color = Color32::BLUE;
+                let debit = egui_plot::Line::new(
+                    "Прибыль от времени",
+                    PlotPoints::Borrowed(&values.debits),
+                )
+                .color(debit_color);
+                let credit = egui_plot::Line::new(
+                    "Расходы от времени",
+                    PlotPoints::Borrowed(&values.credits),
+                )
+                .color(credit_color);
+                plot_ui.line(debit);
+                plot_ui.line(credit);
+            });
     }
     fn set_err(&mut self, err: impl std::error::Error) {
         let message = format!("{err:?}");
