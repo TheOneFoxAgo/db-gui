@@ -25,7 +25,7 @@ impl State {
     pub fn view(&mut self, ui: &mut egui::Ui, db: &Db) {
         ui.heading("Проценты");
         let enabled = self.result.is_none();
-        if let (Some(values)) = (&mut self.values) {
+        if let Some(values) = &mut self.values {
             egui::containers::ScrollArea::new([true, true]).show(ui, |ui| {
                 let size = ui.available_height() / 2.0;
                 ui.horizontal(|ui| {
