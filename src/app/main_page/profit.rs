@@ -5,9 +5,10 @@ use crate::{
 };
 use chrono::DateTime;
 use egui::Color32;
+use egui_plot::PlotPoints;
 use tokio_postgres::Error;
 pub struct State {
-    values: Option<Vec<ProfitPoint>>,
+    values: Option<Vec<egui_plot::PlotPoint>>,
     error_message: Option<String>,
     result: Option<PromiseLite<Result<Vec<ProfitPoint>, Error>>>,
 }
@@ -33,7 +34,7 @@ impl State {
                     .y_axis_label("Деньги")
                     .label_formatter(|_, point| {
                         format!(
-                            "Время:{}\nДеньги:{}",
+                            "Время: {}\nДеньги: {}",
                             DateTime::from_timestamp(point.x as i64, 0)
                                 .map(|d| d.to_string())
                                 .unwrap_or_default(),
@@ -42,12 +43,17 @@ impl State {
                     })
                     .show(ui, |plot_ui| {
                         let color = Color32::RED;
-                        let points: Vec<_> = values.iter().map(|p| p.0).collect();
-                        let line =
-                            egui_plot::Line::new("Прибыль от времени", points.clone()).color(color);
-                        let points = egui_plot::Points::new("Прибыль от времени", points)
-                            .color(color)
-                            .radius(5.0);
+                        let line = egui_plot::Line::new(
+                            "Прибыль от времени",
+                            PlotPoints::Borrowed(&values),
+                        )
+                        .color(color);
+                        let points = egui_plot::Points::new(
+                            "Прибыль от времени",
+                            PlotPoints::Borrowed(&values),
+                        )
+                        .color(color)
+                        .radius(5.0);
                         plot_ui.line(line);
                         plot_ui.points(points);
                     })
@@ -65,7 +71,7 @@ impl State {
         drive_result_promise!(
             self.result,
             Ok(values) => {
-                self.values = Some(values);
+                self.values = Some(values.iter().map(|p| p.0).collect());
                 self.error_message = None;
             },
             Err(err) => self.set_err(err),

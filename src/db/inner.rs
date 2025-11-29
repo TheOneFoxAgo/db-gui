@@ -344,11 +344,17 @@ impl Inner {
                 	SUM(ops.credit) AS credit \
                 	FROM public.operations ops \
                 ) \
-                SELECT art.id, \
-                	100.0 * SUM(ops.debit) / \
-                		NULLIF((SELECT debit FROM totals), 0) AS debit, \
-                	100.0 * SUM(ops.credit) / \
-                		NULLIF((SELECT credit FROM totals), 0) AS credit \
+                SELECT art.name AS article_name, \
+                	CAST( \
+                	    100.0 * SUM(ops.debit) / \
+                		NULLIF((SELECT debit FROM totals), 0) \
+                		AS DOUBLE PRECISION \
+                	) AS debit, \
+                	CAST( \
+                	    100.0 * SUM(ops.credit) / \
+                		NULLIF((SELECT credit FROM totals), 0) \
+                		AS DOUBLE PRECISION \
+                	) AS credit \
                 FROM public.operations ops \
                 RIGHT JOIN public.articles art \
                 ON art.id = ops.article_id \

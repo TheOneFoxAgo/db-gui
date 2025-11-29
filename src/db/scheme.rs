@@ -25,12 +25,13 @@ pub struct BalanceRow {
 
 #[derive(Clone, PartialEq)]
 pub struct PercentsBar {
-    pub debit: egui_plot::Bar,
-    pub credit: egui_plot::Bar,
+    pub article_name: String,
+    pub debit: f64,
+    pub credit: f64,
 }
 
 #[derive(Clone, PartialEq)]
-pub struct ProfitPoint(pub [f64; 2]);
+pub struct ProfitPoint(pub egui_plot::PlotPoint);
 
 #[derive(Clone, PartialEq)]
 pub struct DynamicsPoint {
@@ -79,12 +80,13 @@ impl BalanceRow {
 
 impl PercentsBar {
     pub fn new(row: Row) -> Result<Self, Error> {
-        let position: i32 = row.try_get("article_id")?;
+        let article_name: String = row.try_get("article_name")?;
         let debit: Option<f64> = row.try_get("debit")?;
         let credit: Option<f64> = row.try_get("credit")?;
         Ok(Self {
-            debit: egui_plot::Bar::new(position.into(), debit.unwrap_or(0.0)),
-            credit: egui_plot::Bar::new(position.into(), credit.unwrap_or(0.0)),
+            article_name,
+            debit: debit.unwrap_or_default(),
+            credit: credit.unwrap_or_default(),
         })
     }
 }
@@ -93,7 +95,7 @@ impl ProfitPoint {
         let date: NaiveDateTime = row.try_get("create_date")?;
         let date = date.and_utc().timestamp() as f64;
         let profit: f64 = row.try_get("profit")?;
-        Ok(Self([date, profit]))
+        Ok(Self(egui_plot::PlotPoint { x: date, y: profit }))
     }
 }
 
@@ -101,11 +103,11 @@ impl DynamicsPoint {
     pub fn new(row: Row) -> Result<Self, Error> {
         let date: NaiveDateTime = row.try_get("create_date")?;
         let date = date.and_utc().timestamp() as f64;
-        let debit: i32 = row.try_get("debit")?;
-        let credit: i32 = row.try_get("credit")?;
+        let debit: i64 = row.try_get("debit")?;
+        let credit: i64 = row.try_get("credit")?;
         Ok(Self {
-            debit: (egui_plot::PlotPoint::new(date, debit)),
-            credit: (egui_plot::PlotPoint::new(date, credit)),
+            debit: (egui_plot::PlotPoint::new(date, debit as f64)),
+            credit: (egui_plot::PlotPoint::new(date, credit as f64)),
         })
     }
 }

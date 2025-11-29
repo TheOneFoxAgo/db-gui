@@ -1,8 +1,8 @@
 mod articles;
 mod balance;
-// mod dynamics;
+mod dynamics;
 mod operations;
-// mod percents;
+mod percents;
 mod profit;
 
 use std::borrow::Cow;
@@ -18,6 +18,8 @@ pub struct State {
     articles_state: articles::State,
     balance_state: balance::State,
     profit_state: profit::State,
+    percents_state: percents::State,
+    dynamics_state: dynamics::State,
 }
 
 pub enum Response {
@@ -38,14 +40,7 @@ pub enum SelectedView {
     Articles,
     #[strum(serialize = "Баланс")]
     Balance,
-    None,
 }
-impl Default for SelectedView {
-    fn default() -> Self {
-        Self::None
-    }
-}
-
 impl State {
     pub fn new(db: Db) -> Self {
         Self {
@@ -54,6 +49,8 @@ impl State {
             articles_state: articles::State::new(&db),
             balance_state: balance::State::new(&db),
             profit_state: profit::State::new(&db),
+            percents_state: percents::State::new(&db),
+            dynamics_state: dynamics::State::new(),
             db,
         }
     }
@@ -75,13 +72,13 @@ impl State {
             ui.add_space(20.0);
             self.indicator_selectors(ui);
         });
-        let placeholder = |ui: &mut egui::Ui| ui.heading("Not implemented");
         egui::CentralPanel::default().show(ctx, |ui| match &self.selected {
             SelectedView::Dynamics => {
-                placeholder(ui);
+                self.dynamics_state
+                    .view(ui, &self.db, self.articles_state.table());
             }
             SelectedView::Percentages => {
-                placeholder(ui);
+                self.percents_state.view(ui, &self.db);
             }
             SelectedView::Profit => {
                 self.profit_state.view(ui, &self.db);
@@ -95,9 +92,6 @@ impl State {
             SelectedView::Balance => {
                 self.balance_state.view(ui, &self.db);
             }
-            SelectedView::None => {
-                placeholder(ui);
-            }
         });
         return response;
     }
@@ -106,6 +100,8 @@ impl State {
         self.articles_state.drive();
         self.balance_state.drive();
         self.profit_state.drive();
+        self.percents_state.drive();
+        self.dynamics_state.drive();
     }
     fn tables_selectors(&mut self, ui: &mut egui::Ui) {
         self.side_buttons(
@@ -131,16 +127,16 @@ impl State {
     }
     fn side_buttons(&mut self, heading: &str, variants: &[SelectedView], ui: &mut egui::Ui) {
         ui.heading(heading);
-        let mut chosen_one = SelectedView::None;
+        let mut chosen_one = None;
         for variant in variants {
             let enabled = self.selected == *variant;
             let label: &str = variant.into();
             if ui.selectable_label(enabled, label).clicked() {
-                chosen_one = *variant;
+                chosen_one = Some(*variant);
             }
         }
-        if chosen_one != SelectedView::None {
-            self.selected = chosen_one;
+        if let Some(chosen) = chosen_one {
+            self.selected = chosen;
         }
     }
 }
